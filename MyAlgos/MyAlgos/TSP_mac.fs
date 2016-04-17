@@ -8,7 +8,7 @@ open System.IO
 
 open System.Windows
 
-open FSharp.Charting
+// open FSharp.Charting
 
 //open MyLibrary
 //open MyLibrary.MyUsefulFunctions
@@ -19,6 +19,7 @@ exception InnerError of string
 
 let stopWatch = System.Diagnostics.Stopwatch.StartNew()
 let stopWatch1 = System.Diagnostics.Stopwatch.StartNew()
+
 ///////////////// preparing the data /////////////////
 
 // format of the files
@@ -218,9 +219,13 @@ let TSP_all_c_Dynamic_Programming_with_path_main(D:float32 [,]) = // solves the 
                    helper (acc+r) (m>>>1)
       helper 0 n
 
-    let subsets_by_size : (int list) [] = Array.create (num_cities-1) []
-    for k in 1..(num_subsets-1) do subsets_by_size.[(sumbits k)-1]<- k::subsets_by_size.[(sumbits k)-1] 
+    // build the subsets of fixed size m thanks to a hashtable
+    let hashtable = Array2D.create (num_cities-1) num_subsets false // hashtable.[i-1,n]=true if (sumbits n) = i
+    for k in 1..(num_subsets-1) do hashtable.[(sumbits k)-1,k]<-true
 
+
+    // let subsets_by_size : (int list) [] = Array.create (num_cities-1) [] // this method takes more memory
+    // for k in 1..(num_subsets-1) do subsets_by_size.[(sumbits k)-1]<- k::subsets_by_size.[(sumbits k)-1] 
 
     // member returns [(p,2^p);....] if the pth city is in S
     let members S = [for j in 0..(num_cities-2) do let a= powers_of_2.[j] &&& S
@@ -234,13 +239,18 @@ let TSP_all_c_Dynamic_Programming_with_path_main(D:float32 [,]) = // solves the 
         Dict_Add_or_Insert dyn_res (S,(i,D.[0,i+1])) // distance from 0 to city i+1
         predecessor.[S,i] <- -1y
 
+
+    let mutable old_Subset = hashtable.[0,0..] |> Seq.mapi (fun i x -> (i,x)) |> Seq.filter (fun (a,b)-> (b=true)) |> Seq.map fst |> Seq.toList
+
     for m in 3..num_cities do // on fixe la taille de S
         printfn "m=%A" m
         let stopWatch = System.Diagnostics.Stopwatch.StartNew()
 
         let mutable count = 1
 
-        let Subset_of_size_m = subsets_by_size.[m-2]
+        let Subset_of_size_m = hashtable.[m-2,0..] |> Seq.mapi (fun i x -> (i,x)) |> Seq.filter (fun (a,b)-> (b=true)) |> Seq.map fst |> Seq.toList
+        // let Subset_of_size_m = subsets_by_size.[m-2]
+
         for S in Subset_of_size_m do         
 
                           let S'_list = List.fold (fun acc x -> let a = (((snd x)^^^S_full)&&&S)             // list of subsets of size m-1 included in S
@@ -257,8 +267,14 @@ let TSP_all_c_Dynamic_Programming_with_path_main(D:float32 [,]) = // solves the 
                           // if count%10000 =0 then printfn "count=%A" count
 
         // when the iteration is over, we can delete non relevant entries
-        if (m>=3) then for S' in subsets_by_size.[m-3] do (dyn_res.Remove S' |> ignore)
+        // if (m>=3) then for S' in subsets_by_size.[m-3] do (dyn_res.Remove S' |> ignore)
+
+        // can optimize code by storing Subset_of_size_m-1
+        // if (m>=3) then for S' in (hashtable.[m-3,0..] |> Seq.mapi (fun i x -> (i,x)) |> Seq.filter (fun (a,b)-> (b=true)) |> Seq.map fst |> Seq.toList) do (dyn_res.Remove S' |> ignore)
+        if (m>=3) then for S' in old_Subset do (dyn_res.Remove S' |> ignore)
+        old_Subset <- Subset_of_size_m
         printfn "%f" stopWatch.Elapsed.TotalMilliseconds
+
     printfn "Sfull = %A" dyn_res.[S_full]
     (dyn_res.[S_full],predecessor)
 
